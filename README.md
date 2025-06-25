@@ -6,5 +6,9 @@ Current autonomous driving systems often rely on hard-coded commands or simple o
 
 ## Data Sources
 
-- **doScenes** – Provides natural language instructions and annotations.
-- **nuScenes** – Provides the actual sensor data and vehicle trajectories.
+- **doScenes** – 
+- **nuScenes** –
+  
+## ADVLAT Engine Integration
+
+In addition to the contrastive model, we're replicating the **ADVLAT Engine**, an automated data curation system that uses GPS, video, and NLP to generate structured (scene, instruction, trajectory) triads without manual labeling :contentReference[oaicite:1]{index=1}. Integrating ADVLAT helps to generate customized scene-instruction-trajectory triads at scale allowing us to synthesize additional training and evaluation data on demand, improving robustness and adaptability of our contrastive model beyond the original doScenes coverage :contentReference[oaicite:1]{index=1}.
