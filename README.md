@@ -2,17 +2,14 @@
 
 This project explores how autonomous vehicles can better understand and respond to human instructions by combining natural language, visual scenes, and motion data. We use contrastive learning to align these three forms of input—so that when someone gives a command like “turn left after the stop sign,” the vehicle can interpret that instruction in context and relate it to the scene and appropriate movement.
 
-Current autonomous driving systems often rely on hard-coded commands or simple object detection. Our approach brings a more human-centered way of communicating with vehicles, making it possible for a car to understand flexible language and respond more safely in dynamic, real-world scenarios. By training the model to recognize when all three inputs refer to the same real-world situation, it can learn to generalize and respond to new instructions or unfamiliar environments.
-
 ## Goals
 
 Our goal is to build a model that can understand how language, visual context, and motion relate in real-world driving scenarios. We aim to enable autonomous systems to interpret flexible human instructions and align them with their surrounding environment and behavior. This includes developing a tri-modal contrastive learning model and integrating automated data curation tools like ADVLAT to scale our training process and improve model generalization.
 
-
 ## Data Sources
 
-- **doScenes** – 
-- **nuScenes** –
+- **doScenes** 
+- **nuScenes** 
   
 ## ADVLAT Engine Integration
 
