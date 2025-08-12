@@ -8,7 +8,7 @@ Our goal is to build a model that can understand how language, visual context, a
 
 ## Data Sources
 
-- **doScenes** 
+- **doScenes** doScenes — natural-language instructions and annotations.
 - **nuScenes** 
   
 ## ADVLAT Engine Integration
