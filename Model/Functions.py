@@ -5,111 +5,118 @@ import torch.nn as nn
 from PIL import Image
 import matplotlib.pyplot as plt
 
-# Contrastive Loss Function (NT-Xent / InfoNCE)
-def nt_xent_loss(video_embs, text_embs, temperature: float = 0.1):
+# Contrastive Loss Function
+def nt_xent_loss(v: torch.Tensor, t: torch.Tensor, tau: float, symmetric: bool):
     """
-    video_embs: Tensor (B, D)   — L2-normalized video embeddings
-    text_embs : Tensor (B, D)   — L2-normalized text embeddings
-    returns   : scalar loss tensor
+    Strict NT-Xent for one positive per anchor.
+    v, t: (B, D) L2-normalized embeddings (same B).
+    tau: temperature.
+    symmetric=True averages video→text and text→video; set False for one direction.
     """
-    # Computing Similarity Matrix (B × B)
-    sim_matrix = torch.mm(video_embs, text_embs.t())
-    sim_matrix = sim_matrix / temperature
+    if v.shape != t.shape:
+        raise ValueError(f"Shape mismatch: v {v.shape} vs t {t.shape}")
+    if v.size(0) < 2:
+        raise ValueError("Batch size must be >= 2 for NT-Xent.")
 
-    # Labels are 0,1,...,B-1 so that sim_matrix[i,i] are positives
-    batch_size = sim_matrix.size(0)
-    labels = torch.arange(batch_size, device=sim_matrix.device)
+    # Cosine-sim logits scaled by temperature
+    logits = (v @ t.T) / tau                      # (B, B)
 
-    # Cross-entropy over rows (pulls diagonal up, pushes off-diagonals down)
-    loss = nn.CrossEntropyLoss()(sim_matrix, labels)
-    return loss
+    # Ground-truth: diagonal is the ONLY positive (strict NT-Xent)
+    labels = torch.arange(logits.size(0), device=logits.device)
 
+    if not symmetric:
+        # Non Symmetric NT-Xent (video->text and text->video)
+        return F.cross_entropy(logits, labels)
+    else:
+      # Symmetric NT-Xent (video->text and text->video)
+      return 0.5 * (F.cross_entropy(logits, labels) + F.cross_entropy(logits.T, labels))
 
 # Given a scene number, return the corresponding front camera image path from nuScenes.
-def get_first_cam_front_image_path(nusc, scene_number: int) -> str:
-    """
-    nusc        : NuScenes instance
-    scene_number: 1-based scene index as you present to the user
-    returns     : absolute path to the first CAM_FRONT image
-    """
-    # Convert to zero-based index
+def get_first_cam_front_image_path(scene_number: int):
     scene_index = scene_number - 1
 
-    # Bound check
-    if scene_index < 0 or scene_index >= len(nusc.scene):
-        raise IndexError(f"Scene {scene_number} is out of range. Valid range is 1..{len(nusc.scene)}")
-
-    # NuScenes lookups
     scene = nusc.scene[scene_index]
+
     first_sample_token = scene['first_sample_token']
     sample = nusc.get('sample', first_sample_token)
 
     cam_front_token = sample['data']['CAM_FRONT']
     cam_front_data = nusc.get('sample_data', cam_front_token)
 
-    # Build absolute path
     image_path = os.path.join(nusc.dataroot, cam_front_data['filename'])
     return image_path
 
 
-# Collect ALL CAM_FRONT frame paths for a given scene.
-def get_cam_front_sequence_paths(nusc, scene_number: int) -> List[str]:
-    """
-    nusc        : NuScenes instance
-    scene_number: 1-based scene index
-    returns     : list of absolute CAM_FRONT image paths (in order)
-    """
-    # Convert to zero-based index
-    scene_index = scene_number - 1
-
-    # Bound check
-    if scene_index < 0 or scene_index >= len(nusc.scene):
-        raise IndexError(f"Scene {scene_number} is out of range. Valid range is 1..{len(nusc.scene)}")
-
-    # Walk the scene's linked list of samples
-    scene = nusc.scene[scene_index]
-    sample_token = scene['first_sample_token']
-
-    cam_front_images = []
-    while sample_token:
-        sample = nusc.get('sample', sample_token)
-        cam_token = sample['data']['CAM_FRONT']
-        cam_data = nusc.get('sample_data', cam_token)
-        cam_path = os.path.join(nusc.dataroot, cam_data['filename'])
-        cam_front_images.append(cam_path)
-        sample_token = sample['next'] if sample['next'] else None
-
-    return cam_front_images
-
-
-# Display a single frame of an inputted Scene (non-interactive; good for scripts)
-def display_scene(nusc, scene_number: int):
-    """
-    nusc        : NuScenes instance
-    scene_number: 1-based scene index
-    action      : opens the first CAM_FRONT frame and shows it via matplotlib
-    """
-    image_path = get_first_cam_front_image_path(nusc, scene_number)
-    img = Image.open(image_path).convert("RGB")
+# Display a single frame of inputted Scene
+def display_scene():
+  try:
+    scene_number = int(input("Enter a scene number: "))
+    image_path = get_first_cam_front_image_path(scene_number)
+  except (IndexError, ValueError):
+    print("Invalid Scene Selection! Please enter a number between 1 and 10")
+  else:
+    img = Image.open(image_path)
     plt.imshow(img)
     plt.axis('off')
     plt.title(f"Scene {scene_number} - First CAM_FRONT Frame")
     plt.show()
 
 
-# Preserve frames in a clip to bypass default_collate that PyTorch uses for DataLoader
+# Display all frames of an inputted scene
+def view_cam_front_sequence():
+    try:
+        scene_number = int(input("Enter a scene number: "))
+        if scene_number < 1 or scene_number > 10:
+            raise IndexError("Scene number out of bounds.")
+
+        scene = nusc.scene[scene_number - 1]
+        sample_token = scene['first_sample_token']
+
+        cam_front_images = []
+
+        while sample_token:
+            sample = nusc.get('sample', sample_token)
+            cam_token = sample['data']['CAM_FRONT']
+            cam_data = nusc.get('sample_data', cam_token)
+            cam_path = os.path.join(nusc.dataroot, cam_data['filename'])
+            cam_front_images.append(cam_path)
+            sample_token = sample['next'] if sample['next'] else None
+
+        print(f"Loaded {len(cam_front_images)} CAM_FRONT frames for Scene {scene_number}")
+
+        # Interactive display
+        index = widgets.IntSlider(min=0, max=len(cam_front_images)-1, step=1, description="Frame:")
+
+        def show_frame(i):
+            clear_output(wait=True)
+            img = Image.open(cam_front_images[i])
+            plt.imshow(img)
+            plt.axis('off')
+            plt.title(f"Scene {scene_number} - Frame {i+1}/{len(cam_front_images)}")
+            plt.show()
+            display(index)
+
+        index.observe(lambda change: show_frame(change.new), names='value')
+        show_frame(0)
+
+    except (ValueError, IndexError):
+        print("Invalid Scene Selection. Please enter a number between 1 and 10")
+
+# Preserve frames in a clip to bypass default_collate that pytorch uses for DataLoader
 def collate_fn(batch):
-    """
-    batch: list of (video_clip, instructions) where
-           video_clip is Tensor (T_i, 3, 224, 224)
-           instructions is list[str]
-    returns: (videos_list, instrs_list) keeping variable-length T_i intact
-    """
     videos = []
     instrs = []
-
     for video, instructions in batch:
-        videos.append(video)          # video: Tensor (T_i, 3, 224, 224)
-        instrs.append(instructions)   # instructions: list[str]
-
+        videos.append(video)         # video: Tensor (T_i,3,224,224)
+        instrs.append(instructions)  # instructions: list of str
     return videos, instrs
+
+# Choose the single instruction used as the positive for NT-Xent
+def pick_instruction(texts: str):
+    if not texts:
+        return "maintain normal driving motion"
+    return texts[-1]  # last instruction aligns with your 'final frames' rational
+
+def l2n(x: int):
+    # L2 normalize with an epsilon guard
+    return F.normalize(x, p=2, dim=-1, eps=eps)

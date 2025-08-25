@@ -31,7 +31,7 @@ class SceneLevelDataset(Dataset):
       for sn, instr_list in self.scene_to_instructions.items():
           # Filter out non-string or NaN entries
           cleaned = [inst for inst in instr_list if isinstance(inst, str) and not pd.isna(inst)]
-        
+
           # If nothing left after cleaning, use default
           if not cleaned:
               cleaned = [default_instr]
